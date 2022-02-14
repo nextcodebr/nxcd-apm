@@ -1,0 +1,52 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+
+      {
+        "type": "node",
+        "request": "launch",
+        "name": "Debug Current File",
+        "program": "${file}",
+        "preLaunchTask": "tsc: build - tsconfig.json",
+        //"preLaunchTask": "npm: build:test",
+        "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+        "console": "integratedTerminal"
+      },
+      {
+        "name": "Debug Jest Tests",
+        "type": "node",
+        "request": "launch",
+        "runtimeArgs": ["--inspect-brk", "${workspaceRoot}/node_modules/.bin/jest","--passWithNoTests","--no-cache", "--runInBand", "--coverage", "false"],
+        "console": "integratedTerminal",
+        "internalConsoleOptions": "neverOpen",
+        "env": {
+          "NODE_OPTIONS": "--max_old_space_size=2048"
+        }
+      },
+      {
+        "name": "Run Current Jest Test",
+        "type": "node",
+        "request": "launch",
+        "runtimeArgs": ["${workspaceRoot}/node_modules/.bin/jest", "${file}", "--config","jest.config.all.js", "--passWithNoTests","--no-cache", "--runInBand", "--coverage", "false"],
+        "console": "integratedTerminal",
+        "internalConsoleOptions": "neverOpen",
+        "env": {
+          "NODE_OPTIONS": "--max_old_space_size=2048"
+        }
+      },
+      {
+        "name": "Debug Current Jest Test",
+        "type": "node",
+        "request": "launch",
+        "runtimeArgs": ["--inspect-brk", "${workspaceRoot}/node_modules/.bin/jest", "${file}", "--config","jest.config.all.js", "--passWithNoTests","--no-cache", "--runInBand", "false", "--testTimeout", "600000","--detectOpenHandles"],
+        "console": "integratedTerminal",
+        "internalConsoleOptions": "neverOpen",
+        "env": {
+          "NODE_OPTIONS": "--max_old_space_size=2048"
+        }
+      }
+  ]
+}

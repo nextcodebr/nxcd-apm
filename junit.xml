@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="jest tests" tests="10" failures="0" errors="0" time="11.218">
+  <testsuite name="TurfPolygonAdapter" errors="0" failures="0" skipped="0" timestamp="2021-11-06T22:10:45" time="7.384" tests="2">
+    <testcase classname="TurfPolygonAdapter should return true if smaller polygon is inside biggest one" name="TurfPolygonAdapter should return true if smaller polygon is inside biggest one" time="0.002">
+    </testcase>
+    <testcase classname="TurfPolygonAdapter should return false if smaller polygon is inside biggest one" name="TurfPolygonAdapter should return false if smaller polygon is inside biggest one" time="0">
+    </testcase>
+  </testsuite>
+  <testsuite name="MicrosoftObjectDetectionAdapter" errors="0" failures="0" skipped="0" timestamp="2021-11-06T22:10:45" time="7.378" tests="2">
+    <testcase classname="MicrosoftObjectDetectionAdapter should return a parsed object detection with default min probability" name="MicrosoftObjectDetectionAdapter should return a parsed object detection with default min probability" time="0.003">
+    </testcase>
+    <testcase classname="MicrosoftObjectDetectionAdapter should return null if probability is bellow minimum" name="MicrosoftObjectDetectionAdapter should return null if probability is bellow minimum" time="0">
+    </testcase>
+  </testsuite>
+  <testsuite name="MicrosoftTextRecognitionAdapter" errors="0" failures="0" skipped="0" timestamp="2021-11-06T22:10:45" time="7.374" tests="1">
+    <testcase classname="MicrosoftTextRecognitionAdapter should return a parsed object with one line and one word inside this line" name="MicrosoftTextRecognitionAdapter should return a parsed object with one line and one word inside this line" time="0.003">
+    </testcase>
+  </testsuite>
+  <testsuite name="FieldExtractorBuilder" errors="0" failures="0" skipped="0" timestamp="2021-11-06T22:10:45" time="7.477" tests="5">
+    <testcase classname="FieldExtractorBuilder should return two fields correctly adapted" name="FieldExtractorBuilder should return two fields correctly adapted" time="0.012">
+    </testcase>
+    <testcase classname="FieldExtractorBuilder should return threee fields with diferent minimun confidence" name="FieldExtractorBuilder should return threee fields with diferent minimun confidence" time="0.005">
+    </testcase>
+    <testcase classname="FieldExtractorBuilder should return error if objectDetection method are not executed" name="FieldExtractorBuilder should return error if objectDetection method are not executed" time="0.001">
+    </testcase>
+    <testcase classname="FieldExtractorBuilder should return error if textRecognition method are not executed" name="FieldExtractorBuilder should return error if textRecognition method are not executed" time="0">
+    </testcase>
+    <testcase classname="FieldExtractorBuilder should return undefined if objectDetection was not good" name="FieldExtractorBuilder should return undefined if objectDetection was not good" time="0.003">
+    </testcase>
+  </testsuite>
+</testsuites>

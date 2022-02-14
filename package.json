@@ -1,0 +1,73 @@
+{
+  "name": "@nextid-core-library/nxcd-apm",
+  "version": "0.0.25",
+  "description": "Declarative Application Performance Monitoring",
+  "types": "dist/src/index.d.ts",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/main",
+    "copy:dev-resources": "copyfiles -u 1 src/**/*.json src/**/*.bin dist/src",
+    "copy:test-resources": "copyfiles -u 1 tests/**/*.json tests/**/*.bin tests/**/*.csv dist/tests",
+    "copy:dist-resources": "copyfiles -u 1 src/**/*.json src/**/*.bin dist",
+    "clean": "rimraf dist",
+    "build": "rimraf dist && tsc -p tsconfig-build.json && npm run copy:dev-resources",
+    "build:test": "rimraf dist && tsc -p tsconfig.json && npm run copy:dev-resources && npm run copy:test-resources",
+    "build:dist": "rimraf dist && tsc -p tsconfig-build.json && npm run copy:dist-resources",
+    "build:dist:slim": "rimraf dist && tsc -p tsconfig-build.json",
+    "lint": "eslint .",
+    "lint:fix": "npm run lint -- --fix",
+    "test": "jest --passWithNoTests --no-cache --runInBand",
+    "test:watch": "npm test -- --watch",
+    "test:staged": "npm test -- --findRelatedTests",
+    "test:coverage": "npm test -- --coverage",
+    "test:ci": "jest test --ci --reporters=jest-junit --reporters=default --coverage --coverageReporters=cobertura",
+    "prepare": "husky install",
+    "predist": "npm run build:dist && node dist/predist.js && rm -rf dist/predist* dist/generators/data dist/generators/internal",
+    "predist:slim": "npm run build:dist:slim && node dist/predist.js && rm -rf dist/test",
+    "dist:publish": "npm run predist && cd dist && npm publish",
+    "dist:publish:slim": "npm run predist:slim && cd dist && npm publish"
+  },
+  "keywords": [
+    "diagnostics",
+    "transactions"
+  ],
+  "author": "Fabrício Beltran",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/jest": "^26.0.24",
+    "@types/module-alias": "^2.0.1",
+    "@types/node": "^16.4.7",
+    "@types/proper-lockfile": "^4.1.2",
+    "@types/set-interval-async": "^1.0.0",
+    "@types/uuid": "^8.3.4",
+    "@typescript-eslint/eslint-plugin": "^4.28.5",
+    "copyfiles": "^2.4.1",
+    "eslint": "^7.31.0",
+    "eslint-config-standard-with-typescript": "^20.0.0",
+    "eslint-plugin-import": "^2.23.4",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-promise": "^5.1.0",
+    "fastify": "^3.27.0",
+    "husky": "^7.0.1",
+    "jest": "^27.0.6",
+    "jest-junit": "^13.0.0",
+    "jest-mock-extended": "^1.0.18",
+    "lint-staged": "^11.1.1",
+    "middie": "^6.0.0",
+    "mongodb": "^4.1.4",
+    "rimraf": "^3.0.2",
+    "ts-jest": "^27.0.4",
+    "ts-node-dev": "^1.1.8",
+    "typescript": "^4.3.5",
+    "uuid": "^3.3.3"
+  },
+  "dependencies": {
+    "@nxcd-library/malloc-ts": "^1.0.3",
+    "reflect-metadata": "^0.1.13",
+    "rwlockfile": "^2.0.25",
+    "set-interval-async": "^2.0.3",
+    "threads": "^1.7.0"
+  },
+  "engines": {
+    "node": "16.x"
+  }
+}
