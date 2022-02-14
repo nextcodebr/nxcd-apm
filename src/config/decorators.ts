@@ -1,6 +1,8 @@
+/* eslint-disable no-proto */
 /* eslint-disable @typescript-eslint/no-dynamic-delete */
 import 'reflect-metadata'
 import { TransactionContext } from '../context/transaction'
+import { inspect } from 'node:util'
 
 const ExcludeSym = Symbol.for('ApmExclude')
 const IncludeSym = Symbol.for('ApmInclude')
@@ -44,6 +46,8 @@ const destroySymbols = (obj: any) => {
 }
 
 const Empty: string[] = []
+
+const seen = new Set<any>()
 
 const Exclude = function () {
   return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
@@ -102,14 +106,13 @@ const moduleOf = (fn: Function) => {
 }
 
 const ProxyFactory = {
-  sync: (type: string, self: any, fn: Function, method: string, alias?: string) => {
+  sync: (type: string, proto: any, fn: Function, method: string, alias?: string) => {
     const names = argNames(fn)
-    const bound = fn.bind(self)
-    self[method] = function (...args: any[]) {
+    proto[method] = function (...args: any[]) {
       const txn = TransactionContext.beginTransaction(type, alias ?? method)
       txn.begin(names, args)
       try {
-        const res = bound.apply(self, args)
+        const res = fn.call(this, ...args)
         txn.end(res)
         return res
       } catch (e) {
@@ -118,14 +121,14 @@ const ProxyFactory = {
       }
     }
   },
-  async: (type: string, self: any, fn: Function, method: string, alias?: string) => {
+  async: (type: string, proto: any, fn: Function, method: string, alias?: string) => {
     const names = argNames(fn)
-    const bound = fn.bind(self)
-    self[method] = async function (...args: any[]) {
+
+    proto[method] = async function (...args: any[]) {
       const txn = TransactionContext.beginTransaction(type, alias ?? method)
       txn.begin(names, args)
       try {
-        const res = await bound.apply(self, args)
+        const res = await fn.call(this, ...args)
         txn.end(res)
         return res
       } catch (e) {
@@ -134,24 +137,22 @@ const ProxyFactory = {
       }
     }
   },
-  entryPoint: (type: string, self: any, method: string, opts: ParsedEntryPointOpts, includes: Set<string>) => {
-    let fn = self[method]
+  entryPoint: (type: string, proto: any, method: string, opts: ParsedEntryPointOpts, includes: Set<string>) => {
+    let fn = proto[method]
     const isAsyncFn = isAsync(fn)
 
     if (includes.has(method)) {
       if (isAsyncFn) {
-        ProxyFactory.async(type, self, fn, method, opts.label)
+        ProxyFactory.async(type, proto, fn, method, opts.label)
       } else {
-        ProxyFactory.sync(type, self, fn, method, opts.label)
+        ProxyFactory.sync(type, proto, fn, method, opts.label)
       }
-      fn = self[method].bind(self)
+      fn = proto[method]
       includes.delete(method)
-    } else {
-      fn = fn.bind(self)
     }
 
-    self[method] = function (...args: any[]) {
-      const reqId = opts.reqId.apply(null, args)
+    proto[method] = function (...args: any[]) {
+      const reqId = opts.reqId.apply(this, args)
       return TransactionContext.run({ reqId }, fn, ...args)
     }
   },
@@ -192,6 +193,138 @@ const ProxyFactory = {
   }
 }
 
+const typeName = (self: any) => {
+  // eslint-disable-next-line no-proto
+  const p = self.__proto__
+  const raw = inspect(p)
+  const start = raw.indexOf('{')
+  if (start > 0) {
+    const name = raw.substring(0, start).trim()
+    return name
+  }
+  return ''
+}
+
+const instrument = <T> (type: string, ctor: new (...args: any[]) => T, opts: Opts) => {
+  const proto = ctor.prototype
+
+  const names = Object.getOwnPropertyNames(proto)
+  const excluded = proto[ExcludeSym] as Set<string> | undefined
+  const included = proto[IncludeSym] as Set<string> | undefined
+  const entries = (proto[EntryPointSym] ?? {}) as Record<string, ParsedEntryPointOpts>
+  const interceptable = new Set<string>()
+  const eps = new Set<string>()
+
+  names.forEach(name => {
+    if (isFn(proto, name)) {
+      const e = entries[name]
+
+      if (e) {
+        eps.add(name)
+      }
+
+      if (opts.exclude.includes(name) || excluded?.has(name)) {
+        return
+      }
+
+      if (entries[name]?.exclude) {
+        return
+      }
+
+      if (opts.include.includes(name) || included?.has(name)) {
+        interceptable.add(name)
+        return
+      }
+
+      const isASync = proto[name].constructor.name === 'AsyncFunction'
+
+      const trap = isASync ? opts.async : opts.sync
+      if (trap) {
+        interceptable.add(name)
+      }
+    }
+  })
+
+  if (eps.size) {
+    for (const ep of eps) {
+      ProxyFactory.entryPoint(type, proto, ep, entries[ep], interceptable)
+    }
+  }
+
+  if (interceptable.size) {
+    for (const method of interceptable) {
+      const fn = proto[method]
+
+      if (isAsync(fn)) {
+        ProxyFactory.async(type, proto, fn, method)
+      } else {
+        ProxyFactory.sync(type, proto, fn, method)
+      }
+    }
+  }
+
+  destroySymbols(proto)
+}
+
+const instrumentSuper = (proto: any, type: string, parent: any, opts: Opts) => {
+  const names = Object.getOwnPropertyNames(parent)
+  const excluded = parent[ExcludeSym] as Set<string> | undefined
+  const included = parent[IncludeSym] as Set<string> | undefined
+  const entries = (parent[EntryPointSym] ?? {}) as Record<string, ParsedEntryPointOpts>
+  const interceptable = new Set<string>()
+  const eps = new Set<string>()
+
+  names.forEach(name => {
+    if (isFn(parent, name)) {
+      const e = entries[name]
+
+      if (e) {
+        eps.add(name)
+      }
+
+      if (opts.exclude.includes(name) || excluded?.has(name)) {
+        return
+      }
+
+      if (entries[name]?.exclude) {
+        return
+      }
+
+      if (opts.include.includes(name) || included?.has(name)) {
+        interceptable.add(name)
+        return
+      }
+
+      const isASync = parent[name].constructor.name === 'AsyncFunction'
+
+      const trap = isASync ? opts.async : opts.sync
+      if (trap) {
+        interceptable.add(name)
+      }
+    }
+  })
+
+  if (eps.size) {
+    for (const ep of eps) {
+      ProxyFactory.entryPoint(type, parent, ep, entries[ep], interceptable)
+    }
+  }
+
+  if (interceptable.size) {
+    for (const method of interceptable) {
+      const fn = parent[method]
+
+      if (isAsync(fn)) {
+        ProxyFactory.async(type, parent, fn, method)
+      } else {
+        ProxyFactory.sync(type, parent, fn, method)
+      }
+    }
+  }
+
+  destroySymbols(parent)
+}
+
 const Enable = function (options: ConfigOpts = { async: true, sync: false, exclude: Empty, include: Empty }) {
   const opts: Opts = {
     async: options.async === undefined ? true : options.async,
@@ -204,68 +337,20 @@ const Enable = function (options: ConfigOpts = { async: true, sync: false, exclu
       constructor (...args: any[]) {
         super(...args)
         const self = this as any
-        const root = ctor
-        let curr = root.prototype
+        const type = typeName(self)
+        const clazz = ctor.name
 
-        do {
-          const names = Object.getOwnPropertyNames(curr)
-          const excluded = curr[ExcludeSym] as Set<string> | undefined
-          const included = curr[IncludeSym] as Set<string> | undefined
-          const entries = (curr[EntryPointSym] ?? {}) as Record<string, ParsedEntryPointOpts>
-          const interceptable = new Set<string>()
-          const eps = new Set<string>()
-
-          names.forEach(name => {
-            if (isFn(curr, name)) {
-              const e = entries[name]
-
-              if (e) {
-                eps.add(name)
-              }
-
-              if (opts.exclude.includes(name) || excluded?.has(name)) {
-                return
-              }
-
-              if (entries[name]?.exclude) {
-                return
-              }
-
-              if (opts.include.includes(name) || included?.has(name)) {
-                interceptable.add(name)
-                return
-              }
-
-              const isASync = curr[name].constructor.name === 'AsyncFunction'
-
-              const trap = isASync ? opts.async : opts.sync
-              if (trap) {
-                interceptable.add(name)
-              }
-            }
-          })
-
-          if (eps.size) {
-            for (const ep of eps) {
-              ProxyFactory.entryPoint(root.name, self, ep, entries[ep], interceptable)
-            }
+        if (type === clazz) {
+          if (!seen.has(ctor)) {
+            seen.add(ctor)
+            instrument(type, ctor, opts)
           }
-
-          if (interceptable.size) {
-            for (const method of interceptable) {
-              const fn = self[method]
-
-              if (isAsync(fn)) {
-                ProxyFactory.async(root.name, self, fn, method)
-              } else {
-                ProxyFactory.sync(root.name, self, fn, method)
-              }
-            }
+        } else {
+          if (!seen.has(ctor)) {
+            seen.add(ctor)
+            instrumentSuper(self, clazz, ctor.prototype, opts)
           }
-
-          destroySymbols(curr)
-          curr = curr.prototype
-        } while (curr)
+        }
       }
     }
   }
