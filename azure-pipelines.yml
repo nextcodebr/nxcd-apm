@@ -110,7 +110,7 @@ stages:
                 displayName: 'Publish package'
                 continueOnError: false
                 inputs:
-                  command: 'publish'
+                  command: 'dist:publish:slim'
                   workingDir: $(Build.SourcesDirectory)
                   publishRegistry: 'useFeed'
                   publishFeed: 'NextID/NextidCoreLibrary'

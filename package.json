@@ -22,7 +22,7 @@
     "test:ci": "jest test --ci --reporters=jest-junit --reporters=default --coverage --coverageReporters=cobertura",
     "prepare": "husky install",
     "predist": "npm run build:dist && node dist/predist.js && rm -rf dist/predist* dist/generators/data dist/generators/internal",
-    "predist:slim": "npm run build:dist:slim && node dist/predist.js && rm -rf dist/test",
+    "predist:slim": "npm run build:dist:slim && node dist/predist.js && rm -rf dist/src/test && rm -rf dist/tests",
     "dist:publish": "npm run predist && cd dist && npm publish",
     "dist:publish:slim": "npm run predist:slim && cd dist && npm publish"
   },
