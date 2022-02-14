@@ -153,7 +153,7 @@ const ProxyFactory = {
 
     proto[method] = function (...args: any[]) {
       const reqId = opts.reqId.apply(this, args)
-      return TransactionContext.run({ reqId }, fn, ...args)
+      return TransactionContext.run({ reqId }, fn.bind(this), ...args)
     }
   },
   wrap: async <T extends Function> (fn: T): Promise<T> => {
