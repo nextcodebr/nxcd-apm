@@ -205,9 +205,17 @@ const typeName = (self: any) => {
   return ''
 }
 
-const instrument = <T> (type: string, ctor: new (...args: any[]) => T, opts: Opts) => {
-  const proto = ctor.prototype
+const isClass = (obj: any) => {
+  if (!obj?.name) {
+    return false
+  }
 
+  const raw = inspect(obj)
+
+  return raw.startsWith('class')
+}
+
+const instrument = (type: string, proto: any, opts: Opts) => {
   const names = Object.getOwnPropertyNames(proto)
   const excluded = proto[ExcludeSym] as Set<string> | undefined
   const included = proto[IncludeSym] as Set<string> | undefined
@@ -266,65 +274,6 @@ const instrument = <T> (type: string, ctor: new (...args: any[]) => T, opts: Opt
   destroySymbols(proto)
 }
 
-const instrumentSuper = (proto: any, type: string, parent: any, opts: Opts) => {
-  const names = Object.getOwnPropertyNames(parent)
-  const excluded = parent[ExcludeSym] as Set<string> | undefined
-  const included = parent[IncludeSym] as Set<string> | undefined
-  const entries = (parent[EntryPointSym] ?? {}) as Record<string, ParsedEntryPointOpts>
-  const interceptable = new Set<string>()
-  const eps = new Set<string>()
-
-  names.forEach(name => {
-    if (isFn(parent, name)) {
-      const e = entries[name]
-
-      if (e) {
-        eps.add(name)
-      }
-
-      if (opts.exclude.includes(name) || excluded?.has(name)) {
-        return
-      }
-
-      if (entries[name]?.exclude) {
-        return
-      }
-
-      if (opts.include.includes(name) || included?.has(name)) {
-        interceptable.add(name)
-        return
-      }
-
-      const isASync = parent[name].constructor.name === 'AsyncFunction'
-
-      const trap = isASync ? opts.async : opts.sync
-      if (trap) {
-        interceptable.add(name)
-      }
-    }
-  })
-
-  if (eps.size) {
-    for (const ep of eps) {
-      ProxyFactory.entryPoint(type, parent, ep, entries[ep], interceptable)
-    }
-  }
-
-  if (interceptable.size) {
-    for (const method of interceptable) {
-      const fn = parent[method]
-
-      if (isAsync(fn)) {
-        ProxyFactory.async(type, parent, fn, method)
-      } else {
-        ProxyFactory.sync(type, parent, fn, method)
-      }
-    }
-  }
-
-  destroySymbols(parent)
-}
-
 const Enable = function (options: ConfigOpts = { async: true, sync: false, exclude: Empty, include: Empty }) {
   const opts: Opts = {
     async: options.async === undefined ? true : options.async,
@@ -332,24 +281,32 @@ const Enable = function (options: ConfigOpts = { async: true, sync: false, exclu
     exclude: options.exclude ?? Empty,
     include: options.include ?? Empty
   }
+
   return function <T extends new (...args: any[]) => {}> (ctor: T) {
     return class extends ctor {
       constructor (...args: any[]) {
         super(...args)
+
+        if (!ctor.name || seen.has(ctor)) {
+          return
+        }
+
         const self = this as any
         const type = typeName(self)
         const clazz = ctor.name
 
         if (type === clazz) {
-          if (!seen.has(ctor)) {
-            seen.add(ctor)
-            instrument(type, ctor, opts)
-          }
+          seen.add(ctor)
+          instrument(type, ctor.prototype, opts)
         } else {
-          if (!seen.has(ctor)) {
-            seen.add(ctor)
-            instrumentSuper(self, clazz, ctor.prototype, opts)
-          }
+          do {
+            if (!seen.has(ctor)) {
+              seen.add(ctor)
+              instrument(clazz, ctor.prototype, opts)
+            }
+
+            ctor = ctor.prototype
+          } while (isClass(ctor))
         }
       }
     }

@@ -52,7 +52,6 @@ describe('Proxy inheritance', () => {
   beforeEach(() => {
     sink.flush()
   })
-
   it('Will Proxy Parent method', async () => {
     const id = random()
     TransactionContext.bind(id)
