@@ -30,7 +30,7 @@ class A {
 }
 
 describe('Test', () => {
-  it('Ble', async () => {
+  it('Will Auto Initiate Transaction Context', async () => {
     const a = new A()
 
     let v = a.foo({ reqId: '1' }, {})
