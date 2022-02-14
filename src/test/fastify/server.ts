@@ -7,6 +7,7 @@ import { v4 } from 'uuid'
 import { adapt, Controller, Handlers, HttpMethod, HttpRequest, HttpResponse } from './abstractions'
 import { ServiceOne, ServiceTwo } from './services'
 import { Image } from './payloads'
+import { setup, NewConsumer } from './nats'
 
 const app: FastifyInstance = Fastify()
 
@@ -36,7 +37,12 @@ class AppController extends Controller {
 @Apm.Enable()
 class ImgController extends Controller {
   readonly first = new ServiceOne()
-  readonly second = new ServiceTwo()
+  readonly second: ServiceTwo
+
+  constructor (second: ServiceTwo) {
+    super()
+    this.second = second
+  }
 
   @Apm.EntryPoint(defaultExtract, { label: 'receiveImage' })
   async perform (req: HttpRequest): Promise<HttpResponse<any>> {
@@ -50,18 +56,12 @@ class ImgController extends Controller {
   }
 }
 
-const handlers: Handlers = {
-  [HttpMethod.Post]: [
-    ['/app', new AppController()],
-    ['/img', new ImgController()]
-  ],
-  [HttpMethod.Get]: [],
-  [HttpMethod.Patch]: [],
-  [HttpMethod.Put]: []
-}
-
 const start = async () => {
   use(NewSink({ mongo: { url: 'mongodb://localhost:27017', dbname: 'diagnostics', collection: 'txn_logs' } }))
+
+  await setup()
+
+  const consumer = await NewConsumer()
 
   await app.register(middie)
 
@@ -70,6 +70,16 @@ const start = async () => {
 
     next()
   })
+
+  const handlers: Handlers = {
+    [HttpMethod.Post]: [
+      ['/app', new AppController()],
+      ['/img', new ImgController(new ServiceTwo(consumer))]
+    ],
+    [HttpMethod.Get]: [],
+    [HttpMethod.Patch]: [],
+    [HttpMethod.Put]: []
+  }
 
   for (const [m, h] of Object.entries(handlers)) {
     for (const [path, controler] of h) {
