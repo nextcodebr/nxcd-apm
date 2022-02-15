@@ -1,13 +1,13 @@
 import { Apm } from '../../config'
-import { TransactionContext, use } from '../../context/transaction'
-import { NewSink } from '../../sink/mongo/master'
+import { TransactionContext } from '../../context/transaction'
 import middie from 'middie'
 import Fastify, { FastifyInstance } from 'fastify'
 import { v4 } from 'uuid'
 import { adapt, Controller, Handlers, HttpMethod, HttpRequest, HttpResponse } from './abstractions'
 import { ServiceOne, ServiceTwo } from './services'
 import { Image } from './payloads'
-import { setup, NewConsumer } from './nats'
+import { Producer, spawnConsumer } from './nats'
+import { registerSink } from './mongo'
 
 const app: FastifyInstance = Fastify()
 
@@ -57,11 +57,7 @@ class ImgController extends Controller {
 }
 
 const start = async () => {
-  use(NewSink({ mongo: { url: 'mongodb://localhost:27017', dbname: 'diagnostics', collection: 'txn_logs' } }))
-
-  await setup()
-
-  const consumer = await NewConsumer()
+  registerSink()
 
   await app.register(middie)
 
@@ -71,10 +67,12 @@ const start = async () => {
     next()
   })
 
+  const producer = await Producer.instance()
+
   const handlers: Handlers = {
     [HttpMethod.Post]: [
       ['/app', new AppController()],
-      ['/img', new ImgController(new ServiceTwo(consumer))]
+      ['/img', new ImgController(new ServiceTwo(producer))]
     ],
     [HttpMethod.Get]: [],
     [HttpMethod.Patch]: [],
@@ -86,6 +84,10 @@ const start = async () => {
       app[m as HttpMethod](path, adapt(controler))
     }
   }
+
+  const workerStatus = await spawnConsumer()
+
+  console.log(`Nats Listener: ${JSON.stringify(workerStatus)}`)
 
   await app.listen(8080)
   console.log('Server started')

@@ -1,7 +1,6 @@
-import { Apm } from '../../config'
-import { delay } from '../util'
-import { Image } from './payloads'
-import { Consumer } from './nats'
+import { Apm } from '../../../config'
+import { delay } from '../../util'
+import { Image } from '../payloads'
 
 @Apm.Enable()
 export class ServiceOne {
@@ -13,10 +12,10 @@ export class ServiceOne {
 
 @Apm.Enable()
 export class ServiceTwo {
-  consumer: Consumer
+  producer: { getMagicNumber: () => Promise<number> }
 
-  constructor (consumer: Consumer) {
-    this.consumer = consumer
+  constructor (consumer: { getMagicNumber: () => Promise<number> }) {
+    this.producer = consumer
   }
 
   async shrink (image: Image, dims: { width: number, height: number }) {
@@ -26,12 +25,12 @@ export class ServiceTwo {
       await delay(1000)
     }
 
-    const magic = await this.consumer.getMagicNumber()
+    const magic = await this.producer.getMagicNumber()
 
     if (magic > 0) {
       await delay(magic)
     }
 
-    return image
+    return { image, magic }
   }
 }
