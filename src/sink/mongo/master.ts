@@ -2,6 +2,7 @@ import { spawn, Pool, Worker, ModuleThread } from 'threads'
 import { setIntervalAsync } from 'set-interval-async/dynamic'
 import { ISink, BufferingSink } from '../api'
 import { MongoWorker } from './worker'
+import { DeflateTarget } from '../../share'
 
 type Config = {
   mongo: {
@@ -9,6 +10,7 @@ type Config = {
     dbname: string
     collection: string
   }
+  deflate?: DeflateTarget
   workers?: number
   maxQueued?: number
 }
@@ -35,7 +37,7 @@ class MongoSink<T> extends BufferingSink<T> {
     const [size, maxQueuedJobs] = [constrain(config.workers, 1), constrain(config.maxQueued, 1)]
 
     this.pool = Pool(async () => spawn<MongoWorker>(new Worker('./worker', {
-      workerData: config.mongo
+      workerData: { mongo: config.mongo, deflate: config.deflate }
     })), { size, maxQueuedJobs, concurrency: 1 })
   }
 
@@ -58,6 +60,6 @@ class MongoSink<T> extends BufferingSink<T> {
   }
 }
 
-export const NewSink = <T>(config: Config): ISink<T> => {
+export const NewSink = <T> (config: Config): ISink<T> => {
   return new MongoSink(config)
 }
