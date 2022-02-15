@@ -45,7 +45,7 @@ const h = {
 }
 
 const newDeflater = async () => {
-  const transformer = await RedisTransformer.instance(60, opts)
+  const transformer = await RedisTransformer.instance(60, 64, opts)
 
   return async (txns: Transaction[]) => {
     const mapped = await transformer.deflate(txns)

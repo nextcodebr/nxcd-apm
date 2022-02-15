@@ -6,7 +6,7 @@ import { RedisTransformer } from '../../../integrations/redis'
 import { opts } from '../redis/share'
 
 const newInflater = async () => {
-  const transformer = await RedisTransformer.instance(60, opts)
+  const transformer = await RedisTransformer.instance(60, 64, opts)
 
   return async (data: any) => {
     if (data && Array.isArray(data)) {
@@ -19,7 +19,11 @@ const newInflater = async () => {
 }
 
 export const registerSink = async (exposeBridge?: boolean) => {
-  const sink = NewSink<Transaction>({ mongo: { url: 'mongodb://localhost:27017', dbname: 'diagnostics', collection: 'txn_logs' }, workers: 4 })
+  const sink = NewSink<Transaction>({
+    mongo: { url: 'mongodb://localhost:27017', dbname: 'diagnostics', collection: 'txn_logs' },
+    deflate: { embedLimit: 64, mongo: { dbname: 'diagnostics', collection: 'buffers' } },
+    workers: 4
+  })
   use(sink)
 
   if (exposeBridge) {
