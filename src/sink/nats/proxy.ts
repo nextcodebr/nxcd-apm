@@ -2,31 +2,42 @@ import { Client } from 'ts-nats'
 import { BufferingSink } from '../api'
 import { clearIntervalAsync, setIntervalAsync, SetIntervalAsyncTimer } from 'set-interval-async/dynamic'
 
+type Opts<T> = {
+  target: string
+  flushInterval: number
+  timeout?: number
+  deflate?: (data: T[]) => Promise<any>
+}
+
 export class NatsProxySink<T> extends BufferingSink<T> {
   readonly client: Client
-  readonly target: string
-  readonly timeout?: number
-  timer: SetIntervalAsyncTimer
+  readonly opts: Opts<T>
+  timerId: SetIntervalAsyncTimer
 
-  constructor (client: Client, target: string, flushInterval: number, timeout?: number) {
+  constructor (client: Client, opts: Opts<T>) {
     super()
     this.client = client
-    this.target = target
-    this.timeout = timeout
-    this.timer = setIntervalAsync(async () => {
+    this.opts = opts
+    this.timerId = setIntervalAsync(async () => {
       await this.flush()
-    }, flushInterval)
+    }, opts.flushInterval)
   }
 
   async ingest (slice: T[]): Promise<void> {
-    await this.client.request(this.target, this.timeout, slice)
+    let data: any = slice
+
+    if (this.opts.deflate) {
+      data = await this.opts.deflate(slice)
+    }
+
+    await this.client.request(this.opts.target, this.opts.timeout, data)
   }
 
   async stopAndRestart (flushInterval: number) {
-    if (this.timer) {
-      await clearIntervalAsync(this.timer)
+    if (this.timerId) {
+      await clearIntervalAsync(this.timerId)
     }
-    this.timer = setIntervalAsync(async () => {
+    this.timerId = setIntervalAsync(async () => {
       await this.flush()
     }, flushInterval)
   }

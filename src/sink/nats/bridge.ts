@@ -1,7 +1,15 @@
 import { BufferingSink, ISink } from '../api'
 import { Client, connect, NatsConnectionOptions, MsgCallback, SubscriptionOptions } from 'ts-nats'
 
-export const bridge = async <T> (handle: NatsConnectionOptions | Client, source: string, sink: ISink<T>) => {
+const noop = async <T> (data: any) => data ? data as T[] : undefined
+
+/**
+ * Expose sink as a nats listener.
+ *
+ * Clients without mongo access can use a NatsProxyClient to forward messages to this sink
+ *
+ */
+export const bridge = async<T> (handle: NatsConnectionOptions | Client, source: string, sink: ISink<T>, revive: (data: any) => Promise<T[] | undefined> = noop) => {
   let client: Client
   if (handle instanceof Client) {
     client = handle
@@ -14,8 +22,9 @@ export const bridge = async <T> (handle: NatsConnectionOptions | Client, source:
       return
     }
 
-    if (msg.data) {
-      const vals = msg.data as T[]
+    const vals = await revive(msg.data)
+
+    if (vals) {
       if (sink instanceof BufferingSink) {
         await sink.ingest(vals)
       } else {
