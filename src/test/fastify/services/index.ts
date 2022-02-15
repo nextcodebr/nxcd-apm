@@ -31,6 +31,8 @@ export class ServiceTwo {
       await delay(magic)
     }
 
+    image = { ...image, buffer: Buffer.alloc(magic) }
+
     return { image, magic }
   }
 }
