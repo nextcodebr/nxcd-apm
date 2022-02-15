@@ -1,6 +1,7 @@
 import { spawn, Worker } from 'threads'
 import { NatsWorker } from './consumer'
 
+export * from './share'
 export * from './producer'
 
 export const spawnConsumer = async () => {

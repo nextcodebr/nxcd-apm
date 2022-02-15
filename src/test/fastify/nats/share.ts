@@ -2,8 +2,9 @@ import { connect as conn, Payload } from 'ts-nats'
 
 const prefix = 'app'
 
-const subjects = {
-  managed: 'foo.managed'
+export const subjects = {
+  managed: 'foo.managed',
+  proxy: 'sink.proxy'
 }
 
 const prefixed = {

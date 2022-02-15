@@ -57,7 +57,7 @@ class ImgController extends Controller {
 }
 
 const start = async () => {
-  registerSink()
+  await registerSink(true)
 
   await app.register(middie)
 

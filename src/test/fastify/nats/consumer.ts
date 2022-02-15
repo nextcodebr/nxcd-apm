@@ -1,13 +1,14 @@
 import { Msg } from 'ts-nats'
-import { connect, consumers } from './share'
-import { Apm } from '../../../config'
+import { connect, consumers, subjects } from './share'
 import { Schema } from 'ajv'
 import natsfyFactory, { Levels, loggerFactory } from '@nextid-core-library/natsfy'
-import { TransactionContext } from '../../../context/transaction'
+import { Apm } from '../../../config'
+import { TransactionContext, use } from '../../../context/transaction'
 import { route } from '../../../integrations/nats'
 import { expose } from 'threads/worker'
 import { threadId } from 'worker_threads'
 import { registerSink } from '../mongo'
+import { NatsProxySink } from '../../../sink/nats'
 
 const s: Schema = {
   type: 'object',
@@ -41,10 +42,20 @@ const h = {
   created: false
 }
 
+const registerOrProxySink = async (decoupled: boolean) => {
+  if (decoupled) {
+    const conn = await connect()
+    const proxy = new NatsProxySink(conn, subjects.proxy, 1000, 60000)
+    use(proxy)
+  } else {
+    await registerSink()
+  }
+}
+
 const create = async () => {
-  registerSink()
-  loggerFactory.setActiveLevel(Levels.Debug)
+  await registerOrProxySink(true)
   const conn = await connect()
+  loggerFactory.setActiveLevel(Levels.Debug)
   const natsfy = natsfyFactory(conn, consumers.prefix)
   const listener = new Listener()
 
