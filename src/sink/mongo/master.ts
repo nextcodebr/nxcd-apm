@@ -1,5 +1,4 @@
 import { spawn, Pool, Worker, ModuleThread } from 'threads'
-import { Transaction } from '../../context/transaction'
 import { setIntervalAsync } from 'set-interval-async/dynamic'
 import { ISink, BufferingSink } from '../api'
 import { MongoWorker } from './worker'
@@ -19,7 +18,7 @@ const constrain = (value: number | undefined, def: number) => {
   return value > 0 ? value : def
 }
 
-class MongoSink extends BufferingSink<Transaction> {
+class MongoSink<T> extends BufferingSink<T> {
   runs: number = 0
   config: Config
   pool: Pool<ModuleThread<MongoWorker>>
@@ -40,11 +39,11 @@ class MongoSink extends BufferingSink<Transaction> {
     })), { size, maxQueuedJobs, concurrency: 1 })
   }
 
-  accept (txn: Transaction): void {
+  accept (txn: T): void {
     super.accept(txn)
   }
 
-  async ingest (slice: Transaction[]) {
+  async ingest (slice: T[]) {
     try {
       const done = await this.pool.queue(async (worker: MongoWorker) => {
         const rv = await worker.flush(slice)
@@ -59,6 +58,6 @@ class MongoSink extends BufferingSink<Transaction> {
   }
 }
 
-export const NewSink = (config: Config): ISink<Transaction> => {
+export const NewSink = <T>(config: Config): ISink<T> => {
   return new MongoSink(config)
 }

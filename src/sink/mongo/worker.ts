@@ -1,19 +1,20 @@
 import { MongoClient, Collection } from 'mongodb'
-import { Transaction } from '../../context/transaction'
 import { expose } from 'threads/worker'
 import { DLQ } from '../dlq'
 import { threadId, workerData } from 'worker_threads'
 
-type Handles = {
+type Handles<T> = {
   client?: MongoClient
-  collection?: Collection<Transaction>
-  dlq?: DLQ
+  collection?: Collection<any>
+  dlq?: DLQ<T>
   runs: number
 }
 
-const H: Handles = {
+const H: Handles<any> = {
   runs: 0
 }
+
+const handle = <T> () => H as Handles<T>
 
 const resolve = async () => {
   let c = H.collection
@@ -58,13 +59,13 @@ const lazyDLQ = () => {
 }
 
 const Worker = {
-  flush: async (transactions: Transaction[]) => {
+  flush: async <T> (transactions: T[]) => {
     try {
       const collection = await resolve()
       const buffer = await collection.insertMany(transactions)
       const recovered = await processDLQ(collection, (++H.runs % 60 === 0))
 
-      return { buffer, dlq: recovered }
+      return { threadId, buffer, dlq: recovered }
     } catch (e) {
       lazyDLQ().accept(...transactions)
       await disconnect()
@@ -84,8 +85,8 @@ const Worker = {
   }
 }
 
-const processDLQ = async (collection: Collection<Transaction>, force?: boolean) => {
-  let dlq = H.dlq
+const processDLQ = async <T> (collection: Collection<any>, force?: boolean) => {
+  let dlq = handle<T>().dlq
   if (!dlq && force) {
     dlq = lazyDLQ()
   }
@@ -94,14 +95,15 @@ const processDLQ = async (collection: Collection<Transaction>, force?: boolean) 
     return
   }
 
-  let batches: Array<{ file: string, txns: Transaction[] }> = []
+  let batches: Array<{ file: string, txns: T[] }> = []
   let count = 0
 
   for await (const batch of dlq.list()) {
     batches.push(batch)
     count += batch.txns.length
     if (count >= 50) {
-      await collection.insertMany(batches.flatMap(batch => batch.txns))
+      const txns = batches.flatMap(batch => batch.txns)
+      await collection.insertMany(txns)
       count = 0
       batches = []
 

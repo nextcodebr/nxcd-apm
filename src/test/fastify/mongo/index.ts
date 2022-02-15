@@ -4,7 +4,7 @@ import { bridge } from '../../../sink/nats'
 import { subjects, connect } from '../nats'
 
 export const registerSink = async (exposeBridge?: boolean) => {
-  const sink = NewSink({ mongo: { url: 'mongodb://localhost:27017', dbname: 'diagnostics', collection: 'txn_logs' } })
+  const sink = NewSink({ mongo: { url: 'mongodb://localhost:27017', dbname: 'diagnostics', collection: 'txn_logs' }, workers: 4 })
   use(sink)
 
   if (exposeBridge) {
