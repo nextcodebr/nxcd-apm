@@ -3,12 +3,14 @@ import { connect, consumers, subjects } from './share'
 import { Schema } from 'ajv'
 import natsfyFactory, { Levels, loggerFactory } from '@nextid-core-library/natsfy'
 import { Apm } from '../../../config'
-import { TransactionContext, use } from '../../../context/transaction'
+import { Transaction, TransactionContext, use } from '../../../context/transaction'
 import { route } from '../../../integrations/nats'
 import { expose } from 'threads/worker'
 import { threadId } from 'worker_threads'
 import { registerSink } from '../mongo'
 import { NatsProxySink } from '../../../sink/nats'
+import { RedisTransformer } from '../../../integrations/redis'
+import { opts } from '../redis/share'
 
 const s: Schema = {
   type: 'object',
@@ -42,10 +44,20 @@ const h = {
   created: false
 }
 
+const newDeflater = async () => {
+  const transformer = await RedisTransformer.instance(60, opts)
+
+  return async (txns: Transaction[]) => {
+    const mapped = await transformer.deflate(txns)
+    return mapped
+  }
+}
+
 const registerOrProxySink = async (decoupled: boolean) => {
   if (decoupled) {
     const conn = await connect()
-    const proxy = new NatsProxySink(conn, subjects.proxy, 1000, 60000)
+    const deflate = await newDeflater()
+    const proxy = new NatsProxySink<Transaction>(conn, { target: subjects.proxy, flushInterval: 1000, timeout: 60000, deflate })
     use(proxy)
   } else {
     await registerSink()

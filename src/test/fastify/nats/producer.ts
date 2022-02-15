@@ -2,6 +2,7 @@ import { Client, Msg } from 'ts-nats'
 import { connect, producers } from './share'
 import { Apm } from '../../../config'
 import { TransactionContext } from '../../../context/transaction'
+import { v4 } from 'uuid'
 
 @Apm.Enable({ sync: true })
 export class Producer {
@@ -19,7 +20,8 @@ export class Producer {
     const msg = this.normalize({
       data: {
         reqId: TransactionContext.reqId,
-        sha256: 'fake'
+        sha256: 'fake',
+        buffer: Buffer.from(`fake-buffer-${v4()}`)
       }
     })
 

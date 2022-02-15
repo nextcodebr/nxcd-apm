@@ -64,6 +64,7 @@
   },
   "dependencies": {
     "@nextid-core-library/natsfy": "^1.9.1",
+    "@node-redis/client": "^1.0.3",
     "@nxcd-library/malloc-ts": "^1.0.3",
     "reflect-metadata": "^0.1.13",
     "rwlockfile": "^2.0.25",
