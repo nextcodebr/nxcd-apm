@@ -1,7 +1,7 @@
 import { spawn, Pool, Worker, ModuleThread } from 'threads'
 import { Transaction } from '../../context/transaction'
 import { setIntervalAsync } from 'set-interval-async/dynamic'
-import { ISink } from '../api'
+import { ISink, BufferingSink } from '../api'
 import { MongoWorker } from './worker'
 
 type Config = {
@@ -19,15 +19,14 @@ const constrain = (value: number | undefined, def: number) => {
   return value > 0 ? value : def
 }
 
-class MongoSink implements ISink<Transaction> {
+class MongoSink extends BufferingSink<Transaction> {
   runs: number = 0
   config: Config
-  buffer: Transaction[]
   pool: Pool<ModuleThread<MongoWorker>>
 
   constructor (config: Config) {
+    super()
     this.config = config
-    this.buffer = []
     setIntervalAsync(async () => {
       await this.flush().catch(e => {
 
@@ -42,25 +41,21 @@ class MongoSink implements ISink<Transaction> {
   }
 
   accept (txn: Transaction): void {
-    this.buffer.push(txn)
+    super.accept(txn)
   }
 
-  async flush (): Promise<void> {
-    const len = this.buffer.length
-    if (len > 0) {
-      const copy = this.buffer.splice(0, len)
-      try {
-        const done = await this.pool.queue(async (worker: MongoWorker) => {
-          const rv = await worker.flush(copy)
-          return rv
-        })
-        console.log(`Flushed ${JSON.stringify(done)}`)
-      } catch (e) {
-        console.log(e)
-      }
-
-      ++this.runs
+  async ingest (slice: Transaction[]) {
+    try {
+      const done = await this.pool.queue(async (worker: MongoWorker) => {
+        const rv = await worker.flush(slice)
+        return rv
+      })
+      console.log(`Flushed ${JSON.stringify(done)}`)
+    } catch (e) {
+      console.log(e)
     }
+
+    ++this.runs
   }
 }
 
