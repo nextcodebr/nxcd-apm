@@ -1,8 +1,10 @@
+/* eslint-disable @typescript-eslint/no-dynamic-delete */
 import { TransactionContext } from '../context/transaction'
 
 const ExcludeSym = Symbol.for('ApmExclude')
 const IncludeSym = Symbol.for('ApmInclude')
 const EntryPointSym = Symbol.for('ApmEntryPoint')
+
 const cwd = (() => {
   try {
     let p = process.cwd()
@@ -13,30 +15,21 @@ const cwd = (() => {
   }
 })()
 
-type ConfigOpts = {
-  async?: boolean
-  sync?: boolean
-  exclude?: string[]
-  include?: string[]
-}
-
-type EntryPointOpts = {
-  exclude?: boolean
-  label?: string
-}
-
-type ParsedEntryPointOpts = {
-  reqId: <Args extends any[]> (...args: Args) => string
-  exclude: boolean
-  label: string
-}
-
 type Opts = {
   async: boolean
   sync: boolean
   exclude: string[]
   include: string[]
 }
+
+type EntryPointOpts = {
+  exclude: boolean
+  label: string
+}
+
+type ParsedEntryPointOpts = {
+  reqId: <Args extends any[]> (...args: Args) => string
+} & EntryPointOpts
 
 const isFn = (curr: any, name: string) => {
   return (name !== 'constructor' && typeof curr[name] === 'function')
@@ -45,9 +38,9 @@ const isFn = (curr: any, name: string) => {
 const isAsync = (fn: Function) => fn.constructor.name === 'AsyncFunction'
 
 const destroySymbols = (obj: any) => {
-  // delete obj[ExcludeSym]
-  // delete obj[IncludeSym]
-  // delete obj[EntryPointSym]
+  delete obj[ExcludeSym]
+  delete obj[IncludeSym]
+  delete obj[EntryPointSym]
 }
 
 const Empty: string[] = []
@@ -78,7 +71,7 @@ const Include = function () {
   }
 }
 
-const EntryPoint = function (reqId: (...args: any[]) => string, opts?: EntryPointOpts) {
+const EntryPoint = function (reqId: (...args: any[]) => string, opts?: Partial<EntryPointOpts>) {
   const parsed: ParsedEntryPointOpts = {
     reqId,
     label: opts?.label ?? '',
@@ -159,8 +152,8 @@ const ProxyFactory = {
   sync: (module: string, type: string, proto: any, fn: Function, method: string, alias?: string) => {
     const names = argNames(fn)
     proto[method] = function (...args: any[]) {
-      const txn = TransactionContext.beginTransaction(module, type, alias ?? method)
-      txn.begin(names, args)
+      const txn = TransactionContext.begin(module, type, alias ?? method)
+      txn.commence(names, args)
       try {
         const res = fn.call(this, ...args)
         txn.end(res)
@@ -175,8 +168,8 @@ const ProxyFactory = {
     const names = argNames(fn)
 
     proto[method] = async function (...args: any[]) {
-      const txn = TransactionContext.beginTransaction(module, type, alias ?? method)
-      txn.begin(names, args)
+      const txn = TransactionContext.begin(module, type, alias ?? method)
+      txn.commence(names, args)
       try {
         const res = await fn.call(this, ...args)
         txn.end(res)
@@ -213,8 +206,8 @@ const ProxyFactory = {
     let rv: unknown
     if (isAsync(fn)) {
       rv = async function (...args: any[]) {
-        const txn = TransactionContext.beginTransaction(module, '', name)
-        txn.begin(names, args)
+        const txn = TransactionContext.begin(module, '', name)
+        txn.commence(names, args)
         try {
           const res = await fn.apply(null, args)
           txn.end(res)
@@ -226,8 +219,8 @@ const ProxyFactory = {
       }
     } else {
       rv = function (...args: any[]) {
-        const txn = TransactionContext.beginTransaction(module, '', name)
-        txn.begin(names, args)
+        const txn = TransactionContext.begin(module, '', name)
+        txn.commence(names, args)
         try {
           const res = fn.apply(null, args)
           txn.end(res)
@@ -242,28 +235,6 @@ const ProxyFactory = {
     return rv as T
   }
 }
-
-// const typeName = (self: any) => {
-//   // eslint-disable-next-line no-proto
-//   const p = Object.getPrototypeOf(self)
-//   const raw = inspect(p)
-//   const start = raw.indexOf('{')
-//   if (start > 0) {
-//     const name = raw.substring(0, start).trim()
-//     return name
-//   }
-//   return ''
-// }
-
-// const isClass = (obj: any) => {
-//   if (!obj?.name) {
-//     return false
-//   }
-
-//   const raw = inspect(obj)
-
-//   return raw.startsWith('class')
-// }
 
 const instrument = (module: string, type: string, proto: any, opts: Opts) => {
   const names = Object.getOwnPropertyNames(proto)
@@ -324,7 +295,7 @@ const instrument = (module: string, type: string, proto: any, opts: Opts) => {
   destroySymbols(proto)
 }
 
-const Enable = function (options: ConfigOpts = { async: true, sync: false, exclude: Empty, include: Empty }) {
+const Enable = function (options: Partial<Opts> = { async: true, sync: false, exclude: Empty, include: Empty }) {
   const opts: Opts = {
     async: options.async === undefined ? true : options.async,
     sync: !!options.sync,
