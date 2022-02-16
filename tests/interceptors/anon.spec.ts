@@ -23,12 +23,14 @@ describe('Argument Trap', () => {
 
   it('Will trap sync', async () => {
     TransactionContext.bind('1')
-    const a = await Apm.WrapAnon(add)
+    const a = Apm.WrapAnon(add)
     const r = a(1, 2)
 
     expect(r).toBe(3)
 
     const txn = sink.pop()
+    expect(txn.module.includes('anon.spec')).toBeTruthy()
+    expect(txn.type).toBe('')
     expect(txn.method).toBe('add')
     expect(txn.input).toEqual([{ a: 1 }, { b: 2 }])
     expect(txn.output).toEqual(r)
@@ -36,12 +38,14 @@ describe('Argument Trap', () => {
 
   it('Will trap async sync', async () => {
     TransactionContext.bind('1')
-    const a = await Apm.WrapAnon(addAsync)
+    const a = Apm.WrapAnon(addAsync)
     const r = await a(1, 2)
 
     expect(r).toBe(3)
 
     const txn = sink.pop()
+    expect(txn.module.includes('anon.spec')).toBeTruthy()
+    expect(txn.type).toBe('')
     expect(txn.method).toBe('addAsync')
     expect(txn.input).toEqual([{ a: 1 }, { b: 2 }])
     expect(txn.output).toEqual(r)

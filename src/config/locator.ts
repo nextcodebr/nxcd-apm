@@ -16,7 +16,7 @@ const h: Handle = {
 const PREFIX = '__functionLocation__'
 
 const id = () => {
-  return `${PREFIX}$${++h.seq}`
+  return `${++h.seq}`
 }
 
 const connect = async () => {
@@ -42,24 +42,24 @@ const done = async (uuid: string) => {
     return
   }
   await h.post('Runtime.releaseObjectGroup', {
-    objectGroup: uuid
+    objectGroup: PREFIX
   })
 
   // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-  delete (global as any)[uuid]
+  delete (global as any)[PREFIX][uuid]
 }
 
 const g: any = global as any
 
 export const locate = async (fn: Function) => {
-  await connect()
   const uuid = id()
+  g[PREFIX] = (g[PREFIX] || (g[PREFIX] = {}))
+  g[PREFIX][uuid] = fn
+  await connect()
   try {
-    g[uuid] = fn
-
     const evaluated = await h.post('Runtime.evaluate', {
-      expression: `global['${uuid}']`,
-      objectGroup: uuid
+      expression: `global.${PREFIX}['${uuid}']`,
+      objectGroup: PREFIX
     })
 
     const properties = await h.post('Runtime.getProperties', {

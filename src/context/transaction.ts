@@ -15,6 +15,7 @@ const R: Registry = {
 }
 
 export class Transaction {
+  module: string
   type: string
   method: string
   reqId?: string
@@ -26,7 +27,8 @@ export class Transaction {
   took?: number
   status?: Status
 
-  constructor (type: string, method: string, reqId?: string) {
+  constructor (module: string, type: string, method: string, reqId?: string) {
+    this.module = module
     this.type = type
     this.method = method
     this.reqId = reqId
@@ -107,7 +109,7 @@ interface ITransactionContext {
   set: (key: string, value: any) => void
   wrap: <R, Args extends any[]>(fn: (...args: Args) => R, extract: (...args: Args) => string) => (...args: Args) => Promise<R>
   wrapAsync: <R, Args extends any[]>(fn: (...args: Args) => Promise<R>, extract: (...args: Args) => string) => (...args: Args) => Promise<R>
-  beginTransaction: (type: string, method: string) => Transaction
+  beginTransaction: (module: string, type: string, method: string) => Transaction
   run: <R, Args extends any[]> (ctx: { reqId: string, state?: Record<string, any> }, fn: (...args: Args) => R, ...args: Args) => R
   reqId: string
 }
@@ -162,8 +164,8 @@ class TransactionContextImp implements ITransactionContext {
     return ctx
   }
 
-  beginTransaction (type: string, method: string) {
-    return new Transaction(type, method, this.reqId)
+  beginTransaction (module: string, type: string, method: string) {
+    return new Transaction(module, type, method, this.reqId)
   }
 
   run<R, Args extends any[]> (ctx: { reqId: string, state?: Record<string, any> }, fn: (...args: Args) => R, ...args: Args) {

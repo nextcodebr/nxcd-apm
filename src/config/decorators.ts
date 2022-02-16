@@ -101,15 +101,41 @@ const argNames = (fn: Function) => {
   return result
 }
 
-const moduleOf = (fn: Function) => {
+const getStackTrace = function (...args: any[]) {
+  const err = {
+    name: 'Trace',
+    message: args
+  }
+  Error.captureStackTrace(err, getStackTrace)
+  return ((err as any).stack as string) ?? ''
+}
+
+const moduleOf = (obj: any) => {
+  const stack = getStackTrace(obj).split('\n')
+
+  let ix = (() => {
+    for (let i = stack.length - 1; i >= 0; i--) {
+      if (stack[i].includes('config/decorators')) {
+        return i + 1
+      }
+    }
+    return -1
+  })()
+  const frame = stack[ix]
+
+  if (frame) {
+    ix = frame.lastIndexOf(' ')
+    return ix >= 0 ? frame.substring(ix + 1) : frame
+  }
+
   return ''
 }
 
 const ProxyFactory = {
-  sync: (type: string, proto: any, fn: Function, method: string, alias?: string) => {
+  sync: (module: string, type: string, proto: any, fn: Function, method: string, alias?: string) => {
     const names = argNames(fn)
     proto[method] = function (...args: any[]) {
-      const txn = TransactionContext.beginTransaction(type, alias ?? method)
+      const txn = TransactionContext.beginTransaction(module, type, alias ?? method)
       txn.begin(names, args)
       try {
         const res = fn.call(this, ...args)
@@ -121,11 +147,11 @@ const ProxyFactory = {
       }
     }
   },
-  async: (type: string, proto: any, fn: Function, method: string, alias?: string) => {
+  async: (module: string, type: string, proto: any, fn: Function, method: string, alias?: string) => {
     const names = argNames(fn)
 
     proto[method] = async function (...args: any[]) {
-      const txn = TransactionContext.beginTransaction(type, alias ?? method)
+      const txn = TransactionContext.beginTransaction(module, type, alias ?? method)
       txn.begin(names, args)
       try {
         const res = await fn.call(this, ...args)
@@ -137,15 +163,15 @@ const ProxyFactory = {
       }
     }
   },
-  entryPoint: (type: string, proto: any, method: string, opts: ParsedEntryPointOpts, includes: Set<string>) => {
+  entryPoint: (module: string, type: string, proto: any, method: string, opts: ParsedEntryPointOpts, includes: Set<string>) => {
     let fn = proto[method]
     const isAsyncFn = isAsync(fn)
 
     if (includes.has(method)) {
       if (isAsyncFn) {
-        ProxyFactory.async(type, proto, fn, method, opts.label)
+        ProxyFactory.async(module, type, proto, fn, method, opts.label)
       } else {
-        ProxyFactory.sync(type, proto, fn, method, opts.label)
+        ProxyFactory.sync(module, type, proto, fn, method, opts.label)
       }
       fn = proto[method]
       includes.delete(method)
@@ -156,14 +182,14 @@ const ProxyFactory = {
       return TransactionContext.run({ reqId }, fn.bind(this), ...args)
     }
   },
-  wrap: async <T extends Function> (fn: T): Promise<T> => {
+  wrap: <T extends Function> (fn: T): T => {
     const name = fn.name
     const names = argNames(fn)
     const module = moduleOf(fn)
     let rv: unknown
     if (isAsync(fn)) {
       rv = async function (...args: any[]) {
-        const txn = TransactionContext.beginTransaction(module, name)
+        const txn = TransactionContext.beginTransaction(module, '', name)
         txn.begin(names, args)
         try {
           const res = await fn.apply(null, args)
@@ -176,7 +202,7 @@ const ProxyFactory = {
       }
     } else {
       rv = function (...args: any[]) {
-        const txn = TransactionContext.beginTransaction(module, name)
+        const txn = TransactionContext.beginTransaction(module, '', name)
         txn.begin(names, args)
         try {
           const res = fn.apply(null, args)
@@ -215,7 +241,7 @@ const isClass = (obj: any) => {
   return raw.startsWith('class')
 }
 
-const instrument = (type: string, proto: any, opts: Opts) => {
+const instrument = (module: string, type: string, proto: any, opts: Opts) => {
   const names = Object.getOwnPropertyNames(proto)
   const excluded = proto[ExcludeSym] as Set<string> | undefined
   const included = proto[IncludeSym] as Set<string> | undefined
@@ -255,7 +281,7 @@ const instrument = (type: string, proto: any, opts: Opts) => {
 
   if (eps.size) {
     for (const ep of eps) {
-      ProxyFactory.entryPoint(type, proto, ep, entries[ep], interceptable)
+      ProxyFactory.entryPoint(module, type, proto, ep, entries[ep], interceptable)
     }
   }
 
@@ -264,9 +290,9 @@ const instrument = (type: string, proto: any, opts: Opts) => {
       const fn = proto[method]
 
       if (isAsync(fn)) {
-        ProxyFactory.async(type, proto, fn, method)
+        ProxyFactory.async(module, type, proto, fn, method)
       } else {
-        ProxyFactory.sync(type, proto, fn, method)
+        ProxyFactory.sync(module, type, proto, fn, method)
       }
     }
   }
@@ -296,13 +322,15 @@ const Enable = function (options: ConfigOpts = { async: true, sync: false, exclu
         const clazz = ctor.name
 
         if (type === clazz) {
+          const mod = moduleOf(self)
           seen.add(ctor)
-          instrument(type, ctor.prototype, opts)
+          instrument(mod, type, ctor.prototype, opts)
         } else {
           do {
+            const mod = moduleOf(ctor)
             if (!seen.has(ctor)) {
               seen.add(ctor)
-              instrument(clazz, ctor.prototype, opts)
+              instrument(mod, clazz, ctor.prototype, opts)
             }
 
             ctor = ctor.prototype
