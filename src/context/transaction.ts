@@ -49,7 +49,7 @@ export class Transaction {
       : args?.length
         ? args
         : undefined
-    this.started = new Date()
+    this.started = new Date(Date.now())
   }
 
   end (output?: any) {
@@ -67,7 +67,7 @@ export class Transaction {
   }
 
   private done (status: Status) {
-    const end = new Date()
+    const end = new Date(Date.now())
     this.finished = end
     const s = this.started
     if (s) {
