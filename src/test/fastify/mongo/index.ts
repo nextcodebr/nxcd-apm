@@ -4,13 +4,18 @@ import { bridge } from '../../../sink/nats'
 import { subjects, connect } from '../nats'
 import { RedisTransformer } from '../../../integrations/redis'
 import { opts } from '../redis/share'
+import { restoreDate } from '../../../share'
 
 const newInflater = async () => {
   const transformer = await RedisTransformer.instance(60, 64, opts)
 
   return async (data: any) => {
     if (data && Array.isArray(data)) {
-      const result = await Promise.all(data.map(async v => Object.setPrototypeOf(await transformer.inflate(v), Transaction.prototype) as Transaction))
+      const result = await Promise.all(data.map(async v => {
+        const txn = Object.setPrototypeOf(await transformer.inflate(v), Transaction.prototype) as Transaction
+        return restoreDate(txn, 'started', 'finished')
+      }))
+
       data = result
     }
 

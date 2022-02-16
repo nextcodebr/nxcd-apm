@@ -26,6 +26,10 @@ export const asBuffer = (v: any, embedLimit = -1) => {
   }
 }
 
+export const isGraph = (obj: any) => {
+  return obj && !(obj instanceof Date) && typeof obj === 'object'
+}
+
 const store = (buffer: Buffer, handleKey: string, traps: Record<string, Buffer>) => {
   const sha256 = createHash('sha256').update(buffer).digest().toString('hex')
 
@@ -83,7 +87,7 @@ export const deflate = (obj: any, handleKey: string, traps: Record<string, Buffe
 
     if (buffer) {
       obj = store(buffer, handleKey, traps)
-    } else if (typeof obj === 'object') {
+    } else if (isGraph(obj)) {
       obj = Object.entries(obj).reduce((ret: Record<string, any>, [k, v]) => {
         // inline to avoid some recursion
         if (v) {
@@ -93,7 +97,7 @@ export const deflate = (obj: any, handleKey: string, traps: Record<string, Buffe
             const b = asBuffer(v, embedLimit)
             if (b) {
               v = store(b, handleKey, traps)
-            } else if (typeof v === 'object') {
+            } else if (isGraph(v)) {
               v = deflate(v, handleKey, traps, embedLimit)
             }
           }

@@ -3,7 +3,7 @@ import { expose } from 'threads/worker'
 import { DLQ } from '../dlq'
 import { threadId, workerData } from 'worker_threads'
 import { DeflateTarget } from '../../config/boot'
-import { NewSink, BufferSink, deflate } from '../../share'
+import { NewSink, BufferSink, deflate, restoreDates } from '../../share'
 import { MongoDeflateSink } from './deflate'
 
 type Handles<T> = {
@@ -98,6 +98,7 @@ const prepare = <T> (objs: T[]) => {
   if (H.sink) {
     objs = deflate(objs, '__handle__', traps = {}, H.embedLimit)
   }
+  restoreDates<any>(objs, 'started', 'finished')
   return { objs, traps }
 }
 

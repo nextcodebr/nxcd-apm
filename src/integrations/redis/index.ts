@@ -4,7 +4,7 @@ import {
   RedisModules, RedisScripts
 } from '@node-redis/client'
 import { createHash } from 'crypto'
-import { asBuffer } from '../../share'
+import { asBuffer, isGraph } from '../../share'
 
 export class RedisTransformer {
   static async instance (ttl: number, embedLimit: number, options: RedisClientOptions): Promise<RedisTransformer> {
@@ -55,7 +55,7 @@ export class RedisTransformer {
 
       if (buffer) {
         obj = await this.store(buffer, traps)
-      } else if (typeof obj === 'object') {
+      } else if (isGraph(obj)) {
         const flat = await Promise.all(Object.entries(obj).map(async ([k, v]) => {
           // inline to avoid some recursion
           if (v) {
@@ -65,7 +65,7 @@ export class RedisTransformer {
               const b = asBuffer(v, this.embedLimit)
               if (b) {
                 v = await this.store(b)
-              } else if (typeof v === 'object') {
+              } else if (isGraph(v)) {
                 v = await this.deflate(v, traps)
               }
             }
@@ -94,7 +94,7 @@ export class RedisTransformer {
 
       if (key) {
         obj = await this.find(key, traps)
-      } else if (typeof obj === 'object') {
+      } else if (isGraph(obj)) {
         const flat = await Promise.all(Object.entries(obj).map(async ([k, v]) => {
           if (v) {
             // inline to avoid some recursion
@@ -104,7 +104,7 @@ export class RedisTransformer {
               const k = (v as any).redisHandle
               if (k) {
                 v = await this.find(k)
-              } else if (typeof v === 'object') {
+              } else if (isGraph(v)) {
                 v = await this.inflate(v, traps)
               }
             }
