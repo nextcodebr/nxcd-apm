@@ -2,7 +2,8 @@ import { MongoClient, Collection } from 'mongodb'
 import { expose } from 'threads/worker'
 import { DLQ } from '../dlq'
 import { threadId, workerData } from 'worker_threads'
-import { DeflateTarget, NewSink, BufferSink, deflate } from '../../share'
+import { DeflateTarget } from '../../config/boot'
+import { NewSink, BufferSink, deflate } from '../../share'
 import { MongoDeflateSink } from './deflate'
 
 type Handles<T> = {

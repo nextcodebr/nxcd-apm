@@ -1,5 +1,7 @@
 import { BufferingSink, ISink } from '../api'
-import { Client, connect, NatsConnectionOptions, MsgCallback, SubscriptionOptions } from 'ts-nats'
+import { MsgCallback, SubscriptionOptions } from 'ts-nats'
+import { BridgeOpts } from '../../config/boot'
+import { resolve } from './util'
 
 const noop = async <T> (data: any) => data ? data as T[] : undefined
 
@@ -9,13 +11,10 @@ const noop = async <T> (data: any) => data ? data as T[] : undefined
  * Clients without mongo access can use a NatsProxyClient to forward messages to this sink
  *
  */
-export const bridge = async<T> (handle: NatsConnectionOptions | Client, source: string, sink: ISink<T>, revive: (data: any) => Promise<T[] | undefined> = noop) => {
-  let client: Client
-  if (handle instanceof Client) {
-    client = handle
-  } else {
-    client = await connect(handle)
-  }
+export const bridge = async<T> (opts: BridgeOpts<T>, sink: ISink<T>) => {
+  const { handle, source, revive = noop } = opts
+
+  const client = await resolve(handle)
 
   const callback: MsgCallback = async (err, msg) => {
     if (!msg.reply) {
@@ -43,9 +42,9 @@ export const bridge = async<T> (handle: NatsConnectionOptions | Client, source: 
     await client.publish(msg.reply, reply)
   }
 
-  const opts: SubscriptionOptions = { queue: source }
+  const subOpts: SubscriptionOptions = { queue: source }
 
-  const sub = await client.subscribe(source, callback, opts)
+  const sub = await client.subscribe(source, callback, subOpts)
 
   return sub
 }

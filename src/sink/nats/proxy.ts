@@ -1,18 +1,19 @@
-import { Client } from 'ts-nats'
+import { Client, NatsConnectionOptions } from 'ts-nats'
 import { BufferingSink } from '../api'
 import { clearIntervalAsync, setIntervalAsync, SetIntervalAsyncTimer } from 'set-interval-async/dynamic'
-
-type Opts<T> = {
-  target: string
-  flushInterval: number
-  timeout?: number
-  deflate?: (data: T[]) => Promise<any>
-}
+import { NatsProxySinkConnfig as Opts } from '../../config/boot'
+import { resolve } from './util'
 
 export class NatsProxySink<T> extends BufferingSink<T> {
   readonly client: Client
   readonly opts: Opts<T>
   timerId: SetIntervalAsyncTimer
+
+  static async instance<V> (handle: NatsConnectionOptions | Client, opts: Opts<V>) {
+    const client = await resolve(handle)
+
+    return new NatsProxySink(client, opts)
+  }
 
   constructor (client: Client, opts: Opts<T>) {
     super()

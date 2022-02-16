@@ -29,6 +29,6 @@ export const registerSink = async (exposeBridge?: boolean) => {
   if (exposeBridge) {
     const inflate = await newInflater()
     const client = await connect()
-    await bridge(client, subjects.proxy, sink, inflate)
+    await bridge({ handle: client, source: subjects.proxy, revive: inflate }, sink)
   }
 }

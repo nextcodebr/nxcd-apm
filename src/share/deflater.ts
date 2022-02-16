@@ -34,8 +34,6 @@ const store = (buffer: Buffer, handleKey: string, traps: Record<string, Buffer>)
   return { [handleKey]: sha256 }
 }
 
-export type DeflateTarget = { embedLimit: number } & ({ mongo: { dbname: string, collection: string } } | { fs: { base: string } } | { minio: { url: string } })
-
 export interface BufferSink {
   accept: (traps: Record<string, Buffer>) => Promise<string[]>
 }
