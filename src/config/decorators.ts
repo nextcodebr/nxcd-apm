@@ -1,12 +1,17 @@
-/* eslint-disable no-proto */
-/* eslint-disable @typescript-eslint/no-dynamic-delete */
-import 'reflect-metadata'
 import { TransactionContext } from '../context/transaction'
-import { inspect } from 'node:util'
 
 const ExcludeSym = Symbol.for('ApmExclude')
 const IncludeSym = Symbol.for('ApmInclude')
 const EntryPointSym = Symbol.for('ApmEntryPoint')
+const cwd = (() => {
+  try {
+    let p = process.cwd()
+    p = p[p.length - 1] === '/' ? p : p + '/'
+    return p === '/' ? ' ' : p
+  } catch (e) {
+    return ' '
+  }
+})()
 
 type ConfigOpts = {
   async?: boolean
@@ -111,21 +116,40 @@ const getStackTrace = function (...args: any[]) {
 }
 
 const moduleOf = (obj: any) => {
-  const stack = getStackTrace(obj).split('\n')
+  let stack
+  let ix: number
+  if (obj instanceof Error) {
+    stack = (obj.stack ?? '').split('\n')
+    ix = 2
+  } else {
+    stack = getStackTrace(obj).split('\n')
 
-  let ix = (() => {
-    for (let i = stack.length - 1; i >= 0; i--) {
-      if (stack[i].includes('config/decorators')) {
-        return i + 1
+    ix = (() => {
+      for (let i = stack.length - 1; i >= 0; i--) {
+        if (stack[i].includes('config/decorators')) {
+          return i + 1
+        }
       }
-    }
-    return -1
-  })()
-  const frame = stack[ix]
+      return -1
+    })()
+  }
+
+  let frame = stack[ix]
 
   if (frame) {
-    ix = frame.lastIndexOf(' ')
-    return ix >= 0 ? frame.substring(ix + 1) : frame
+    ix = frame.lastIndexOf(':')
+    const start = frame.indexOf('(')
+
+    if (start > 0 && (ix = frame.indexOf(':', start)) > start) {
+      frame = frame.substring(start + 1, ix)
+    } else {
+      ix = frame.lastIndexOf(' ')
+      frame = ix >= 0 ? frame.substring(ix + 1) : frame
+    }
+
+    frame = frame.replace(cwd, '')
+
+    return frame
   }
 
   return ''
@@ -219,27 +243,27 @@ const ProxyFactory = {
   }
 }
 
-const typeName = (self: any) => {
-  // eslint-disable-next-line no-proto
-  const p = self.__proto__
-  const raw = inspect(p)
-  const start = raw.indexOf('{')
-  if (start > 0) {
-    const name = raw.substring(0, start).trim()
-    return name
-  }
-  return ''
-}
+// const typeName = (self: any) => {
+//   // eslint-disable-next-line no-proto
+//   const p = Object.getPrototypeOf(self)
+//   const raw = inspect(p)
+//   const start = raw.indexOf('{')
+//   if (start > 0) {
+//     const name = raw.substring(0, start).trim()
+//     return name
+//   }
+//   return ''
+// }
 
-const isClass = (obj: any) => {
-  if (!obj?.name) {
-    return false
-  }
+// const isClass = (obj: any) => {
+//   if (!obj?.name) {
+//     return false
+//   }
 
-  const raw = inspect(obj)
+//   const raw = inspect(obj)
 
-  return raw.startsWith('class')
-}
+//   return raw.startsWith('class')
+// }
 
 const instrument = (module: string, type: string, proto: any, opts: Opts) => {
   const names = Object.getOwnPropertyNames(proto)
@@ -308,36 +332,20 @@ const Enable = function (options: ConfigOpts = { async: true, sync: false, exclu
     include: options.include ?? Empty
   }
 
+  /**
+   * Trap call site where Enable is invoked. This happens at module load-time,
+   * so we are guaranteed to find the location 1 stack frame bellow
+   */
+  const module = moduleOf(new Error())
+
   return function <T extends new (...args: any[]) => {}> (ctor: T) {
-    return class extends ctor {
-      constructor (...args: any[]) {
-        super(...args)
-
-        if (!ctor.name || seen.has(ctor)) {
-          return
-        }
-
-        const self = this as any
-        const type = typeName(self)
-        const clazz = ctor.name
-
-        if (type === clazz) {
-          const mod = moduleOf(self)
-          seen.add(ctor)
-          instrument(mod, type, ctor.prototype, opts)
-        } else {
-          do {
-            const mod = moduleOf(ctor)
-            if (!seen.has(ctor)) {
-              seen.add(ctor)
-              instrument(mod, clazz, ctor.prototype, opts)
-            }
-
-            ctor = ctor.prototype
-          } while (isClass(ctor))
-        }
-      }
+    if (!ctor.name || seen.has(ctor)) {
+      return
     }
+
+    seen.add(ctor)
+
+    instrument(module, ctor.name, ctor.prototype, opts)
   }
 }
 
