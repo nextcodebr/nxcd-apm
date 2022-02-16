@@ -1,6 +1,6 @@
 {
   "name": "@nextid-core-library/nxcd-apm",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Declarative Application Performance Monitoring",
   "types": "dist/src/index.d.ts",
   "scripts": {
