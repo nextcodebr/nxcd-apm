@@ -32,6 +32,11 @@ type ParsedEntryPointOpts = {
   reqId: <Args extends any[]> (...args: Args) => string
 } & EntryPointOpts
 
+type TransformOptions<R> = {
+  input: (...args: any[]) => any[]
+  output: (o: R) => any
+}
+
 const isFn = (curr: any, name: string) => {
   return (name !== 'constructor' && typeof curr[name] === 'function')
 }
@@ -46,6 +51,14 @@ const destroySymbols = (obj: any) => {
 }
 
 const Empty: string[] = []
+
+const noop = (o: any) => o
+const vargsNoop = (...o: any) => o
+
+const NoopOpts: TransformOptions<any> = {
+  input: vargsNoop,
+  output: noop
+}
 
 const seen = new Set<any>()
 
@@ -90,19 +103,7 @@ const EntryPoint = function (reqId: (...args: any[]) => string, opts?: Partial<E
   }
 }
 
-type TransformOptions = {
-  input: (args: any[]) => any[]
-  output: (o: any) => any
-}
-
-const noop = (o: any) => o
-
-const NoopOpts: TransformOptions = {
-  input: noop,
-  output: noop
-}
-
-const Transform = (opts: Partial<TransformOptions> = NoopOpts) => {
+const Transform = <R> (cfg: Partial<TransformOptions<R>>) => {
   return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
     let transform = target[TransformSym]
 
@@ -111,8 +112,8 @@ const Transform = (opts: Partial<TransformOptions> = NoopOpts) => {
     }
 
     transform[propertyKey] = {
-      input: opts.input ?? noop,
-      output: opts.output ?? noop
+      input: cfg?.input ?? vargsNoop,
+      output: cfg?.output ?? noop
     }
   }
 }
@@ -183,7 +184,7 @@ const ProxyFactory = {
     const transform = proto[TransformSym] ? proto[TransformSym][fn.name] ?? NoopOpts : NoopOpts
     proto[method] = function (...args: any[]) {
       const txn = TransactionContext.begin(module, type, alias ?? method)
-      txn.commence(names, transform.input(args))
+      txn.commence(names, transform.input(...args))
       try {
         const res = fn.call(this, ...args)
         txn.end(transform.output(res))
@@ -200,7 +201,7 @@ const ProxyFactory = {
 
     proto[method] = async function (...args: any[]) {
       const txn = TransactionContext.begin(module, type, alias ?? method)
-      txn.commence(names, transform.input(args))
+      txn.commence(names, transform.input(...args))
       try {
         const res = await fn.call(this, ...args)
         txn.end(transform.output(res))

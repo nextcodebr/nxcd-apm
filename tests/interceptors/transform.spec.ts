@@ -8,7 +8,7 @@ const random = () => {
 
 @Apm.Enable({ sync: true })
 class A {
-  @Apm.Transform({ output: (o) => { return { wrapped: { o } } } })
+  @Apm.Transform({ output: (o: { width: number, height: number }) => { return { wrapped: { o } } } })
   resize (dims: { width: number, height: number }, scale: number) {
     const o = { ...dims }
     o.width = o.width * scale
@@ -16,12 +16,12 @@ class A {
     return o
   }
 
-  @Apm.Transform({ input: (args: any[]) => [{ _a: args[0] }, { _b: args[1] }] })
+  @Apm.Transform({ input: (a: number, b: number) => [{ _a: a }, { _b: b }] })
   add (a: number, b: number) {
     return a + b
   }
 
-  @Apm.Transform({ input: (args: any[]) => [{ _a: args[0] }, { _b: args[1] }], output: (o: number) => { return { res: o } } })
+  @Apm.Transform({ input: (a: number, b: number) => [{ _a: a }, { _b: b }], output: (r: number) => { return { res: r } } })
   mul (a: number, b: number) {
     return a * b
   }
@@ -56,5 +56,15 @@ describe('Argument Trap', () => {
     const txn = sink.pop()
     expect(txn.input).toEqual([{ dims: { width: 1, height: 2 } }, { scale: 2 }])
     expect(txn.output).toEqual({ wrapped: { o: r } })
+  })
+
+  it('Will transform input and output', async () => {
+    TransactionContext.bind(random())
+    const r = a.mul(3, 4)
+    expect(r).toEqual(12)
+
+    const txn = sink.pop()
+    expect(txn.input).toEqual([{ a: { _a: 3 } }, { b: { _b: 4 } }])
+    expect(txn.output).toEqual({ res: r })
   })
 })
