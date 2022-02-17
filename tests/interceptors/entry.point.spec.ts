@@ -7,7 +7,7 @@ const sink = new RecordingSink()
 
 use(sink)
 
-const extractReqId = (req: Record<string, any>) => req.reqId as string
+const extractReqId = (req: Record<string, any>, _: any) => req.reqId as string
 
 @Apm.Enable({ sync: true })
 class A {
