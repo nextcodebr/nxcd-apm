@@ -4,6 +4,7 @@ import { TransactionContext } from '../context/transaction'
 const ExcludeSym = Symbol.for('ApmExclude')
 const IncludeSym = Symbol.for('ApmInclude')
 const EntryPointSym = Symbol.for('ApmEntryPoint')
+const TransformSym = Symbol.for('ApmTransform')
 
 const cwd = (() => {
   try {
@@ -41,6 +42,7 @@ const destroySymbols = (obj: any) => {
   delete obj[ExcludeSym]
   delete obj[IncludeSym]
   delete obj[EntryPointSym]
+  delete obj[TransformSym]
 }
 
 const Empty: string[] = []
@@ -85,6 +87,33 @@ const EntryPoint = function (reqId: (...args: any[]) => string, opts?: Partial<E
     }
 
     eps[propertyKey] = parsed
+  }
+}
+
+type TransformOptions = {
+  input: (args: any[]) => any[]
+  output: (o: any) => any
+}
+
+const noop = (o: any) => o
+
+const NoopOpts: TransformOptions = {
+  input: noop,
+  output: noop
+}
+
+const Transform = (opts: Partial<TransformOptions> = NoopOpts) => {
+  return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+    let transform = target[TransformSym]
+
+    if (!transform) {
+      transform = target[TransformSym] = {}
+    }
+
+    transform[propertyKey] = {
+      input: opts.input ?? noop,
+      output: opts.output ?? noop
+    }
   }
 }
 
@@ -151,12 +180,13 @@ const moduleOf = (obj: any) => {
 const ProxyFactory = {
   sync: (module: string, type: string, proto: any, fn: Function, method: string, alias?: string) => {
     const names = argNames(fn)
+    const transform = proto[TransformSym] ? proto[TransformSym][fn.name] ?? NoopOpts : NoopOpts
     proto[method] = function (...args: any[]) {
       const txn = TransactionContext.begin(module, type, alias ?? method)
-      txn.commence(names, args)
+      txn.commence(names, transform.input(args))
       try {
         const res = fn.call(this, ...args)
-        txn.end(res)
+        txn.end(transform.output(res))
         return res
       } catch (e) {
         txn.failed(e)
@@ -166,13 +196,14 @@ const ProxyFactory = {
   },
   async: (module: string, type: string, proto: any, fn: Function, method: string, alias?: string) => {
     const names = argNames(fn)
+    const transform = proto[TransformSym] ? proto[TransformSym][fn.name] ?? NoopOpts : NoopOpts
 
     proto[method] = async function (...args: any[]) {
       const txn = TransactionContext.begin(module, type, alias ?? method)
-      txn.commence(names, args)
+      txn.commence(names, transform.input(args))
       try {
         const res = await fn.call(this, ...args)
-        txn.end(res)
+        txn.end(transform.output(res))
         return res
       } catch (e) {
         txn.failed(e)
@@ -325,5 +356,6 @@ export const Apm = {
   Include,
   EntryPoint,
   Enable,
-  WrapAnon: ProxyFactory.wrap
+  Transform,
+  wrap: ProxyFactory.wrap
 }

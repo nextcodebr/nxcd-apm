@@ -23,7 +23,7 @@ describe('Argument Trap', () => {
 
   it('Will trap sync', async () => {
     TransactionContext.bind('1')
-    const a = Apm.WrapAnon(add)
+    const a = Apm.wrap(add)
     const r = a(1, 2)
 
     expect(r).toBe(3)
@@ -38,7 +38,7 @@ describe('Argument Trap', () => {
 
   it('Will trap async sync', async () => {
     TransactionContext.bind('1')
-    const a = Apm.WrapAnon(addAsync)
+    const a = Apm.wrap(addAsync)
     const r = await a(1, 2)
 
     expect(r).toBe(3)
