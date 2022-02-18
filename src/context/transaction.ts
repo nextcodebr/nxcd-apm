@@ -65,6 +65,7 @@ export class Transaction {
   module: string
   type: string
   method: string
+  seq: number
   reqId?: string
   input?: any
   output?: any
@@ -74,10 +75,11 @@ export class Transaction {
   took?: number
   status?: Status
 
-  constructor (module: string, type: string, method: string, reqId?: string) {
+  constructor (module: string, type: string, method: string, seq: number, reqId?: string) {
     this.module = module
     this.type = type
     this.method = method
+    this.seq = seq
     this.reqId = reqId
   }
 
@@ -122,6 +124,7 @@ export class Transaction {
 
 interface CallContext {
   reqId: string
+  seq: number
   get: (key: string) => any
   set: (key: string, value: any) => void
   setAll: (state?: Record<string, any>) => void
@@ -129,10 +132,12 @@ interface CallContext {
 
 class CallContextImp implements CallContext {
   readonly reqId: string
+  sequence: number
   state: Record<string, any>
 
   constructor (reqId: string, state?: Record<string, any>) {
     this.reqId = reqId
+    this.sequence = 0
     this.state = state ?? {}
   }
 
@@ -148,6 +153,10 @@ class CallContextImp implements CallContext {
     if (state) {
       this.state = { ...this.state, ...state }
     }
+  }
+
+  get seq () {
+    return this.sequence++
   }
 }
 
@@ -219,7 +228,8 @@ class TransactionContextImp implements ITransactionContext {
   }
 
   begin (module: string, type: string, method: string) {
-    return new Transaction(module, type, method, this.reqId)
+    const c = this.current()
+    return new Transaction(module, type, method, c.seq, c.reqId)
   }
 
   run<R, Args extends any[]> (ctx: { reqId: string, state?: Record<string, any> }, fn: (...args: Args) => R, ...args: Args) {
