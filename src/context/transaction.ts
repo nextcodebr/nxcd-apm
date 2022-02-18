@@ -11,14 +11,54 @@ export const enum UnboundPolicy {
   continue = 1
 }
 
+export const enum ErrorMappingOptions {
+  stack = 1,
+  stackAsArray = 2,
+  trim = 4,
+  filterFrames = 8
+}
+
 type Registry = {
   current: ISink<Transaction>
   policy: UnboundPolicy
+  errors: ErrorMappingOptions
 }
 
 const R: Registry = {
   current: BlackHole<Transaction>(),
-  policy: UnboundPolicy.continue
+  policy: UnboundPolicy.continue,
+  errors: ErrorMappingOptions.stack | ErrorMappingOptions.stackAsArray | ErrorMappingOptions.trim | ErrorMappingOptions.filterFrames
+}
+
+const map = (error: any) => {
+  const message = error.message as string
+
+  if (!(R.errors & ErrorMappingOptions.stack)) {
+    delete error.stack
+  } else if ((R.errors & ErrorMappingOptions.stackAsArray) && typeof error.stack === 'string') {
+    let stack = error.stack = error.stack.split('\n') as string[]
+
+    if (R.errors & ErrorMappingOptions.filterFrames) {
+      const head = stack[0]
+      if (head && typeof message === 'string' && message.length && head.endsWith(message)) {
+        error.message = head
+        if (!stack.shift()) {
+          return
+        }
+      }
+
+      stack = (error.stack as string[]).filter(v =>
+        (v?.includes('/') && !v.includes('node:internal') && !v.includes('config/decorators'))
+      )
+
+      error.stack = stack
+    }
+
+    if (R.errors & ErrorMappingOptions.trim) {
+      error.stack = (error.stack as string[]).map(v => v?.trim())
+    }
+  }
+  return error
 }
 
 export class Transaction {
@@ -28,7 +68,7 @@ export class Transaction {
   reqId?: string
   input?: any
   output?: any
-  error: any
+  error?: any
   started?: Date
   finished?: Date
   took?: number
@@ -60,8 +100,8 @@ export class Transaction {
   }
 
   failed (err?: any) {
-    if (err !== undefined) {
-      this.error = err
+    if (err) {
+      this.error = map(err)
     }
     this.done(Status.error)
   }
@@ -195,4 +235,8 @@ export const use = (sink: ISink<Transaction>) => {
 
 export const policy = (policy: UnboundPolicy) => {
   R.policy = policy
+}
+
+export const errorMapping = (options: ErrorMappingOptions) => {
+  R.errors = options
 }
