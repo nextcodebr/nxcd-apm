@@ -1,6 +1,7 @@
 import { Apm } from '../../../config'
 import { delay } from '../../util'
 import { Image } from '../payloads'
+import { createHash } from 'crypto'
 
 @Apm.Enable()
 export class ServiceOne {
@@ -25,14 +26,29 @@ export class ServiceTwo {
       await delay(1000)
     }
 
+    const state = new Sha256State()
+    state.set(image.buffer)
     const magic = await this.producer.getMagicNumber()
 
     if (magic > 0) {
       await delay(magic)
     }
 
-    image = { ...image, buffer: Buffer.alloc(magic) }
+    const buffer = Buffer.alloc(magic).fill(magic)
+    state.set(buffer)
 
-    return { image, magic }
+    image = { ...image, buffer }
+
+    return { image, magic, token: state.token }
+  }
+}
+
+@Apm.Enable({ sync: true })
+class Sha256State {
+  token?: string
+
+  @Apm.Audit()
+  set (buffer: Buffer) {
+    this.token = createHash('sha256').update(buffer).digest().toString('hex')
   }
 }

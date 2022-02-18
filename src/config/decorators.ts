@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-dynamic-delete */
 import { TransactionContext } from '../context/transaction'
+import { TransitionSym, audit } from './proxy'
 
 const ExcludeSym = Symbol.for('ApmExclude')
 const IncludeSym = Symbol.for('ApmInclude')
@@ -48,6 +49,7 @@ const destroySymbols = (obj: any) => {
   delete obj[IncludeSym]
   delete obj[EntryPointSym]
   delete obj[TransformSym]
+  delete obj[TransitionSym]
 }
 
 const Empty: string[] = []
@@ -118,6 +120,18 @@ const Transform = <R> (cfg: Partial<TransformOptions<R>>) => {
   }
 }
 
+const Audit = function () {
+  return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+    let audit = target[TransitionSym]
+
+    if (!audit) {
+      audit = target[TransitionSym] = new Set()
+    }
+
+    audit.add(propertyKey)
+  }
+}
+
 const argNames = (fn: Function) => {
   const code = fn.toString().replace(/[^A-Z0-9_,()?]/gi, '')
   const begin = code.indexOf('(')
@@ -182,16 +196,34 @@ const ProxyFactory = {
   sync: (module: string, type: string, proto: any, fn: Function, method: string, alias?: string) => {
     const names = argNames(fn)
     const transform = proto[TransformSym] ? proto[TransformSym][fn.name] ?? NoopOpts : NoopOpts
-    proto[method] = function (...args: any[]) {
-      const txn = TransactionContext.begin(module, type, alias ?? method)
-      txn.commence(names, transform.input(...args))
-      try {
-        const res = fn.call(this, ...args)
-        txn.end(transform.output(res))
-        return res
-      } catch (e) {
-        txn.failed(e)
-        throw e
+
+    if ((proto[TransitionSym] as Set<string>)?.has(method)) {
+      proto[method] = function (...args: any[]) {
+        const txn = TransactionContext.begin(module, type, alias ?? method)
+        txn.commence(names, transform.input(...args))
+        try {
+          const res = fn.call(audit(this), ...args)
+          txn.end(transform.output(res), this[TransitionSym])
+          return res
+        } catch (e) {
+          txn.failed(e, this[TransitionSym])
+          throw e
+        } finally {
+          delete this[TransitionSym]
+        }
+      }
+    } else {
+      proto[method] = function (...args: any[]) {
+        const txn = TransactionContext.begin(module, type, alias ?? method)
+        txn.commence(names, transform.input(...args))
+        try {
+          const res = fn.call(this, ...args)
+          txn.end(transform.output(res))
+          return res
+        } catch (e) {
+          txn.failed(e)
+          throw e
+        }
       }
     }
   },
@@ -199,16 +231,33 @@ const ProxyFactory = {
     const names = argNames(fn)
     const transform = proto[TransformSym] ? proto[TransformSym][fn.name] ?? NoopOpts : NoopOpts
 
-    proto[method] = async function (...args: any[]) {
-      const txn = TransactionContext.begin(module, type, alias ?? method)
-      txn.commence(names, transform.input(...args))
-      try {
-        const res = await fn.call(this, ...args)
-        txn.end(transform.output(res))
-        return res
-      } catch (e) {
-        txn.failed(e)
-        throw e
+    if ((proto[TransitionSym] as Set<string>)?.has(method)) {
+      proto[method] = async function (...args: any[]) {
+        const txn = TransactionContext.begin(module, type, alias ?? method)
+        txn.commence(names, transform.input(...args))
+        try {
+          const res = await fn.call(audit(this), ...args)
+          txn.end(transform.output(res), this[TransitionSym])
+          return res
+        } catch (e) {
+          txn.failed(e, this[TransitionSym])
+          throw e
+        } finally {
+          delete this[TransitionSym]
+        }
+      }
+    } else {
+      proto[method] = async function (...args: any[]) {
+        const txn = TransactionContext.begin(module, type, alias ?? method)
+        txn.commence(names, transform.input(...args))
+        try {
+          const res = await fn.call(this, ...args)
+          txn.end(transform.output(res))
+          return res
+        } catch (e) {
+          txn.failed(e)
+          throw e
+        }
       }
     }
   },
@@ -358,5 +407,6 @@ export const Apm = {
   EntryPoint,
   Enable,
   Transform,
+  Audit,
   wrap: ProxyFactory.wrap
 }

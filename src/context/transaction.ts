@@ -74,6 +74,7 @@ export class Transaction {
   finished?: Date
   took?: number
   status?: Status
+  transitions?: any
 
   constructor (module: string, type: string, method: string, seq: number, reqId?: string) {
     this.module = module
@@ -81,31 +82,6 @@ export class Transaction {
     this.method = method
     this.seq = seq
     this.reqId = reqId
-  }
-
-  commence (names: string[] | null, args?: any[]) {
-    this.input = names?.length && args
-      ? names.map((name, ix) => {
-        return { [name]: args[ix] }
-      })
-      : args?.length
-        ? args
-        : undefined
-    this.started = new Date(Date.now())
-  }
-
-  end (output?: any) {
-    if (output !== undefined) {
-      this.output = output
-    }
-    this.done(Status.success)
-  }
-
-  failed (err?: any) {
-    if (err) {
-      this.error = map(err)
-    }
-    this.done(Status.error)
   }
 
   private done (status: Status) {
@@ -119,6 +95,39 @@ export class Transaction {
     this.status = status
 
     R.current.accept(this)
+  }
+
+  commence (names: string[] | null, args?: any[]) {
+    this.input = names?.length && args
+      ? names.map((name, ix) => {
+        return { [name]: args[ix] }
+      })
+      : args?.length
+        ? args
+        : undefined
+    this.started = new Date(Date.now())
+  }
+
+  end (output?: any, transitions?: any) {
+    if (output !== undefined) {
+      this.output = output
+    }
+    this.record(transitions)
+    this.done(Status.success)
+  }
+
+  failed (err?: any, transitions?: any) {
+    if (err) {
+      this.error = map(err)
+    }
+    this.record(transitions)
+    this.done(Status.error)
+  }
+
+  record (transitions?: any) {
+    if (transitions) {
+      this.transitions = transitions
+    }
   }
 }
 
